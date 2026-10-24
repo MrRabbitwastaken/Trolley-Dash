@@ -126,8 +126,22 @@ input[type=checkbox] { accent-color: var(--leaf); width: 22px; height: 22px; fle
 details.multi { flex: 1 1 140px; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
 details.multi > summary { cursor: pointer; padding: 7px 10px; font-size: 14px; list-style: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 details.multi > summary::after { content: " ▾"; color: var(--muted); } details.multi[open] > summary::after { content: " ▴"; }
-.multi-panel { display: flex; flex-direction: column; gap: 6px; padding: 6px 10px 10px; border-top: 1px solid var(--line); max-height: 220px; overflow: auto; }
-.multi-panel label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+details.multi { position: relative; }
+.multi-panel { position: absolute; left: 0; top: 100%; z-index: 15; width: min(280px, calc(100vw - 48px)); display: flex; flex-direction: column; gap: 2px; padding: 6px 12px 8px; margin-top: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.2); max-height: 260px; overflow: auto; }
+.multi-panel label { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 12px; width: 100%; margin: 0; padding: 4px 0; font-size: 14px; text-align: left; cursor: pointer; }
+.multi-panel label span { flex: 1; min-width: 0; text-align: left; }
+.multi-panel label input[type=checkbox] { flex: none; width: 20px; height: 20px; margin: 0; }
+
+.lk-group { margin: 8px 0 4px; } .lk-label { margin: 0 0 4px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.lk-opt { display: flex; align-items: flex-start; gap: 10px; margin: 10px 0; cursor: pointer; } .lk-opt small { color: var(--muted); }
+.lk-count { margin: 8px 0; }
+.lk-go { width: 100%; padding: 11px; border: 0; border-radius: 8px; background: var(--leaf); color: var(--leaf-ink); font: inherit; font-weight: 700; cursor: pointer; }
+.lk-go:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; }
+.lk-result h3 { margin: 14px 0 4px; font-size: 15px; } .lk-list { list-style: none; margin: 0; padding: 0; }
+.lk-list li { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); } .lk-list li b { flex: none; min-width: 64px; text-transform: capitalize; } .lk-list li span { flex: 1; }
+.lk-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; margin-top: 8px; }
+.lk-actions .secondary { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+
 .sure { color: #b3261e !important; font-weight: 700; font-size: 13px !important; }
 small.used { display: block; font-weight: 400; }
 .pantry-ask { flex-basis: 100%; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); padding: 2px 0 6px 28px; }
@@ -687,6 +701,131 @@ function aisleOf(it) {
 }
 const AISLE_ORDER = ["Fruit & veg", "Bakery", "Meat & fish", "Dairy & eggs", "Frozen", "Pasta, rice & dry", "Tins, jars & sauces", "Herbs, spices & drinks", "Household & baby", "Other"];
 
+/*
+ * "Pick for me": fills the week with meals chosen at random from the genres you tick, and can favour meals that
+ * share ingredients so the shop is smaller. Used by both the extension and the website.
+ */
+const Lucky = (() => {
+  const COURSES = [["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"]];
+  const LEVELS = [["easy", "Easy"], ["medium", "Medium"], ["hard", "Hard"]];
+  const GENRES = [["vegetarian", "Veggie"], ["vegan", "Vegan"], ["glutenFree", "Gluten-free"], ["dairyFree", "Dairy-free"], ["quick", "≤ 30 min"], ["veryQuick", "≤ 15 min"],
+    ["chicken", "Chicken"], ["beef", "Beef"], ["pork", "Pork"], ["lamb", "Lamb"], ["seafood", "Fish & seafood"], ["pasta", "Pasta"], ["rice", "Rice"], ["potato", "Potatoes"], ["eggs", "Eggs"],
+    ["indian", "Indian"], ["mexican", "Mexican"], ["italian", "Italian"], ["thai", "Thai"], ["chinese", "Chinese"]];
+  const STAPLE = /^(salt|pepper|black pepper|olive oil|vegetable oil|sunflower oil|rapeseed oil|oil|water|sugar|plain flour)\b/;
+  const keyOf = (i) => String(i.name || "").trim().toLowerCase();
+  const ingsOf = (r, skip) => new Set((r.ingredients || []).map(keyOf).filter((k) => k && !STAPLE.test(k) && !(skip && skip(k))));
+
+  // Choose `count` meals from `pool`. With overlap, run many random greedy attempts and keep the one with the fewest different ingredients.
+  function choose(pool, count, { overlap, seed = new Set(), skip, rand = Math.random } = {}) {
+    if (!pool.length || count <= 0) return [];
+    const shuffle = (a) => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+    const sets = new Map(pool.map((r) => [r.id, ingsOf(r, skip)]));
+    const fill = (picked) => { let order = shuffle(pool); while (picked.length < count) { const next = order.find((r) => !picked.includes(r)) || order[0]; picked.push(next); if (!order.length) break; if (picked.length < count && picked.length % pool.length === 0) order = shuffle(pool); } return picked; };
+    if (!overlap) return fill([]).slice(0, count);
+    let best = null, bestScore = Infinity;
+    for (let t = 0; t < 80; t++) {
+      const union = new Set(seed), picked = [], left = shuffle(pool);
+      while (picked.length < count && left.length) {
+        let bi = 0, bs = -1;
+        for (let i = 0; i < left.length; i++) {                     // most ingredients already in the shop, random tie-break (list is shuffled)
+          let s = 0; for (const k of sets.get(left[i].id)) if (union.has(k)) s++;
+          if (picked.length === 0 && !seed.size) s = 0;
+          if (s > bs) { bs = s; bi = i; }
+        }
+        const [r] = left.splice(bi, 1); picked.push(r); for (const k of sets.get(r.id)) union.add(k);
+      }
+      while (picked.length < count) picked.push(pool[Math.floor(rand() * pool.length)]);   // fewer meals than days: repeat some
+      const score = union.size;
+      if (score < bestScore) { bestScore = score; best = picked; }
+    }
+    return shuffle(best);
+  }
+
+  // env: { openSheet, closeSheet, recipes(), tags(r), weekStart(), dayList(ws,d), validEntry(e), byId(id), addToPlan(ws,d,id,sv,course), defServ(r), DAYS, pantryHas(name), hasMeal(entry,course), onDone(msg) }
+  function open(env) {
+    const st = { courses: new Set(["dinner"]), levels: new Set(), genres: new Set(), days: new Set([0, 1, 2, 3, 4, 5, 6]), overlap: true, onlyEmpty: true };
+    const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+    env.openSheet("Pick my week", (sb) => {
+      const ws = env.weekStart();
+      const pool = (course) => env.recipes().filter((r) => r.meal === course && (!st.levels.size || st.levels.has(r.tier)) && [...st.genres].every((g) => env.tags(r)[g]));
+      const chipRow = (label, opts, set, extra) => {
+        const box = h("div", "lk-group"); box.append(h("p", "lk-label", label));
+        const row = h("div", "chips");
+        for (const [k, l] of opts) {
+          const b = h("button", "chip", l); b.type = "button"; b.dataset.k = String(k); b.setAttribute("aria-pressed", String(set.has(k)));
+          b.addEventListener("click", () => { set.has(k) ? set.delete(k) : set.add(k); b.setAttribute("aria-pressed", String(set.has(k))); if (extra) extra(); refresh(); });
+          row.append(b);
+        }
+        box.append(row); return box;
+      };
+      let count, go, msg;
+      const slotsFor = () => {
+        const out = [];
+        for (const course of COURSES.map((c) => c[0]).filter((c) => st.courses.has(c)))
+          for (const d of [...st.days].sort()) if (!(st.onlyEmpty && env.dayList(ws, d).some((e) => env.validEntry(e) && env.hasMeal(e, course)))) out.push({ d, course });
+        return out;
+      };
+      const refresh = () => {
+        const n = [...st.courses].map((c) => pool(c).length);
+        const slots = slotsFor();
+        count.textContent = st.courses.size ? `${n.map((x, i) => `${x} ${[...st.courses][i]}`).join(" · ")} match` + (slots.length ? ` · ${slots.length} slot${slots.length === 1 ? "" : "s"} to fill` : " · nothing to fill") : "Pick at least one meal type";
+        go.disabled = !st.courses.size || !slots.length || n.some((x) => x === 0);
+      };
+      sb.append(
+        chipRow("Meals to fill", COURSES, st.courses),
+        chipRow("Difficulty (any of)", LEVELS, st.levels),
+        chipRow("Only meals that are…", GENRES, st.genres),
+        chipRow("Days", env.DAYS.map((d, i) => [i, d.slice(0, 3)]), st.days),
+      );
+      const opt = (label, key, hint) => {
+        const l = h("label", "lk-opt"); const c = document.createElement("input"); c.type = "checkbox"; c.checked = st[key];
+        c.addEventListener("change", () => { st[key] = c.checked; refresh(); });
+        const t = h("span"); t.append(h("b", null, label), h("br"), h("small", null, hint)); l.append(c, t); return l;
+      };
+      sb.append(opt("Share ingredients to save money", "overlap", "Favours meals that use the same ingredients, so you buy less."),
+                opt("Only fill empty days", "onlyEmpty", "Leave meals you have already planned alone."));
+      count = h("p", "hint lk-count"); count.setAttribute("role", "status"); sb.append(count);
+      go = h("button", "lk-go", "🎲 Pick for me"); go.type = "button"; go.id = "lucky-go"; sb.append(go);
+      msg = h("div", "lk-result");
+      sb.append(msg);
+      let proposal = [];
+      const ingTotal = (ps) => { const u = new Set(); ps.forEach((p) => ingsOf(p.r, env.pantryHas).forEach((k) => u.add(k))); return u.size; };
+      const roll = () => {
+        const slots = slotsFor(); proposal = [];
+        const seed = new Set();                                         // ingredients of meals already planned this week
+        for (let d = 0; d < 7; d++) for (const e of env.dayList(ws, d)) { const r = env.validEntry(e) && !e.text && env.byId(e.id); if (r) ingsOf(r, env.pantryHas).forEach((k) => seed.add(k)); }
+        for (const course of st.courses) {
+          const mine = slots.filter((s) => s.course === course); if (!mine.length) continue;
+          const picks = choose(pool(course), mine.length, { overlap: st.overlap, seed, skip: env.pantryHas });
+          mine.forEach((s, i) => { proposal.push({ ...s, r: picks[i] }); ingsOf(picks[i], env.pantryHas).forEach((k) => seed.add(k)); });
+        }
+        proposal.sort((a, b) => a.d - b.d || COURSES.findIndex((c) => c[0] === a.course) - COURSES.findIndex((c) => c[0] === b.course));
+        draw();
+      };
+      const draw = () => {
+        msg.innerHTML = "";
+        msg.append(h("h3", null, "Your week"));
+        const ul = h("ul", "lk-list");
+        for (const p of proposal) { const li = h("li"); li.append(h("b", null, env.DAYS[p.d].slice(0, 3) + (st.courses.size > 1 ? " · " + p.course : "")), h("span", null, p.r.name)); ul.append(li); }
+        msg.append(ul, h("p", "hint", `${ingTotal(proposal)} different ingredients in total.`));
+        const row = h("div", "lk-actions");
+        const again = h("button", "secondary", "Shuffle again"); again.type = "button"; again.addEventListener("click", roll);
+        const use = h("button", "lk-go", "Add to my week"); use.type = "button"; use.id = "lucky-use";
+        use.addEventListener("click", () => {
+          for (const p of proposal) env.addToPlan(ws, p.d, p.r.id, env.defServ(p.r), p.course);
+          const n = proposal.length; env.closeSheet(); env.onDone(`Planned ${n} meal${n === 1 ? "" : "s"} for you.`);
+        });
+        row.append(again, use); msg.append(row);
+        msg.scrollIntoView && msg.scrollIntoView({ block: "nearest" });
+      };
+      go.addEventListener("click", roll);
+      refresh();
+    });
+  }
+  return { choose, open, ingsOf, COURSES, GENRES };
+})();
+
+
 
 function leftovers() {
   const m = new Map();
@@ -1110,6 +1249,14 @@ function viewWeek(main) {
   pv.addEventListener("click", () => { planWeek = shiftWeek(planWeek, -1); rr(); }); nx.addEventListener("click", () => { planWeek = shiftWeek(planWeek, 1); rr(); });
   head.append(pv, el("h2", null, planWeek === thisWeek ? "This week · from " + fmtDay(planWeek) : planWeek === shiftWeek(thisWeek, 1) ? "Next week · from " + fmtDay(planWeek) : "Week of " + fmtDay(planWeek)), nx);
   main.append(head);
+  const lk = el("button", "btn primary lucky", "🎲 Pick for me"); lk.type = "button"; lk.id = "lucky"; lk.style.cssText = "width:100%;margin:0 0 10px";
+  lk.addEventListener("click", () => Lucky.open({
+    openSheet, closeSheet, recipes: () => all().filter((r) => !hiddenRec.has(r.id)), tags: Diet.tags, weekStart: () => planWeek || weekStart(Date.now()),
+    dayList, validEntry, byId, addToPlan: (ws, d, id, sv, course) => { dayList(ws, d, true).push({ id, servings: sv, course }); }, defServ, DAYS, pantryHas: (k) => pantry.has(k),
+    hasMeal: (e, course) => (e.course || (byId(e.id) || {}).meal) === course,
+    onDone: (m) => { persist(); rr(); toast(m); },
+  }));
+  main.append(lk);
   const today = new Date(); today.setHours(0, 0, 0, 0);
   for (let d = 0; d < 7; d++) {
     const date = new Date(planWeek); date.setDate(date.getDate() + d);
@@ -1288,7 +1435,7 @@ function viewEss(main) {
           const panel = el("div", "multi-panel");
           e.types.forEach((x) => { const lab = el("label"); const c = el("input"); c.type = "checkbox"; c.checked = essPicked(e).includes(x[0]); c.setAttribute("aria-label", x[0] + " for " + e.name);
             c.addEventListener("change", () => { const cur = new Set(essPicked(e)); c.checked ? cur.add(x[0]) : cur.delete(x[0]); const arr = e.types.map((t) => t[0]).filter((l) => cur.has(l)); arr.length ? (essTypes[e.id] = arr) : delete essTypes[e.id]; draw(); persist(); });
-            lab.append(c, document.createTextNode(" " + x[0])); panel.append(lab); });
+            const tx = el("span", null, x[0]); lab.append(tx, c); panel.append(lab); });
           d.append(panel); draw(); d.open = openMulti.has(e.id); d.addEventListener("toggle", () => { d.open ? openMulti.add(e.id) : openMulti.delete(e.id); }); pickRow.append(d);
         }
         if (hasB) {
