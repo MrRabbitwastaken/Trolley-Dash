@@ -120,6 +120,14 @@ input[type=checkbox] { accent-color: var(--leaf); width: 22px; height: 22px; fle
 .crow .grow { flex: 1; min-width: 0; }
 .crow input[type=text] { margin-top: 4px; min-height: 34px; padding: 5px 8px; font-size: 14px; }
 .hidex { flex: none; border: 0; background: none; color: var(--muted); font-size: 16px; padding: 6px 8px; cursor: pointer; min-width: 36px; min-height: 36px; }
+.collh { cursor: pointer; user-select: none; }
+.collh::before { content: "▾"; display: inline-block; width: 14px; font-size: 11px; color: var(--muted); }
+.collh[data-open="false"]::before { content: "▸"; }
+details.multi { flex: 1 1 140px; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+details.multi > summary { cursor: pointer; padding: 7px 10px; font-size: 14px; list-style: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+details.multi > summary::after { content: " ▾"; color: var(--muted); } details.multi[open] > summary::after { content: " ▴"; }
+.multi-panel { display: flex; flex-direction: column; gap: 6px; padding: 6px 10px 10px; border-top: 1px solid var(--line); max-height: 220px; overflow: auto; }
+.multi-panel label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .sure { color: #b3261e !important; font-weight: 700; font-size: 13px !important; }
 small.used { display: block; font-weight: 400; }
 .pantry-ask { flex-basis: 100%; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); padding: 2px 0 6px 28px; }
@@ -324,7 +332,7 @@ const ESSENTIALS = [
     ["mk", "Milk", "semi skimmed milk 4 pint", { ph: "e.g. skimmed, 2 pint, oat", brands: ["Cravendale", "Alpro", "Oatly", "Arla", "Lactofree"], types: [["Semi-skimmed (4 pint)", "semi skimmed milk 4 pint"], ["Semi-skimmed (2 pint)", "semi skimmed milk 2 pint"], ["Skimmed", "skimmed milk"], ["Whole", "whole milk"], ["Oat", "oat milk"], ["Almond", "almond milk"], ["Soya", "soya milk"], ["Lactose free", "lactose free milk"]] }],
     ["br", "Bread", "wholemeal bread loaf", { ph: "e.g. Warburtons seeded", brands: ["Warburtons", "Hovis", "Kingsmill", "Allinson", "Roberts"], types: [["White", "white bread loaf"], ["Wholemeal", "wholemeal bread loaf"], ["Seeded", "seeded bread loaf"], ["Brown", "brown bread loaf"], ["Sourdough", "sourdough loaf"], ["Gluten free", "gluten free bread"]] }],
     ["eg", "Eggs", "free range eggs 12", { brands: ["Happy Egg Co", "Clarence Court"], types: [["Free range 12", "free range eggs 12"], ["Free range 6", "free range eggs 6"], ["Large", "large eggs"], ["Barn", "barn eggs"]] }],
-    ["bu", "Butter", "butter 250g", { brands: ["Lurpak", "Anchor", "Kerrygold", "Country Life"], types: [["Block butter 250g", "butter 250g"], ["Spreadable", "spreadable butter"], ["Dairy-free spread", "dairy free spread"]] }],
+    ["bu", "Butter", "butter 250g", { brands: ["Lurpak", "Anchor", "Kerrygold", "Country Life"], types: [["Salted block 250g", "salted butter 250g"], ["Unsalted block 250g", "unsalted butter 250g"], ["Spreadable", "spreadable butter"], ["Dairy-free spread", "dairy free spread"]] }],
     ["ch", "Cheese", "mature cheddar 350g", { brands: ["Cathedral City", "Pilgrims Choice", "Davidstow", "Philadelphia", "Dairylea"], types: [["Mature cheddar", "mature cheddar 350g"], ["Mild cheddar", "mild cheddar"], ["Grated", "grated cheese"], ["Slices", "cheese slices"], ["Mozzarella", "mozzarella"], ["Cream cheese", "cream cheese"]] }],
     ["yo", "Yoghurt", "natural yoghurt 500g", { brands: ["Müller", "Yeo Valley", "Onken", "Activia", "Fage"], types: [["Natural", "natural yoghurt 500g"], ["Greek", "greek yoghurt"], ["Fruit", "fruit yoghurt"], ["Dairy-free", "dairy free yoghurt"]] }],
     ["ba", "Bananas", "bananas 5 pack"], ["ap", "Apples", "apples 6 pack", { types: [["Gala", "gala apples"], ["Braeburn", "braeburn apples"], ["Granny Smith", "granny smith apples"], ["Pink Lady", "pink lady apples"]] }],
@@ -365,7 +373,7 @@ const ESSENTIALS = [
   ["Drinks", [
     ["tea", "Tea bags", "tea bags 80", { brands: ["PG Tips", "Yorkshire Tea", "Tetley", "Twinings", "Typhoo"], types: [["80 bags", "tea bags 80"], ["160 bags", "tea bags 160"], ["Decaf", "decaf tea bags"], ["Green tea", "green tea"], ["Earl Grey", "earl grey tea"]] }],
     ["co", "Coffee", "instant coffee", { who: "adult", brands: ["Nescafé", "Kenco", "Douwe Egberts", "Lavazza", "Taylors"], types: [["Instant", "instant coffee"], ["Ground", "ground coffee"], ["Beans", "coffee beans"], ["Pods", "coffee pods"], ["Decaf", "decaf coffee"]] }],
-    ["oj", "Orange juice", "orange juice 1l", { brands: ["Tropicana", "Innocent", "Copella", "Del Monte", "Minute Maid"], types: [["Orange juice", "orange juice 1l"], ["Apple juice", "apple juice"], ["Cranberry", "cranberry juice"], ["Smoothie", "fruit smoothie"]] }],
+    ["oj", "Fruit juice", "fruit juice 1l", { brands: ["Tropicana", "Innocent", "Copella", "Del Monte", "Minute Maid"], types: [["Orange juice", "orange juice 1l"], ["Apple juice", "apple juice"], ["Cranberry", "cranberry juice"], ["Pineapple", "pineapple juice"], ["Smoothie", "fruit smoothie"]] }],
     ["sq", "Squash / cordial", "squash", { brands: ["Robinsons", "Ribena", "Vimto", "Kia-Ora"] }],
     ["fz", "Fizzy drinks", "cola", { brands: ["Coca-Cola", "Pepsi", "Fanta", "Sprite", "Irn-Bru"], types: [["Cola", "cola"], ["Diet / zero cola", "diet cola"], ["Lemonade", "lemonade"], ["Orange", "orange fizzy drink"]] }],
     ["wa", "Water", "still water", { types: [["Still water", "still water 6 pack"], ["Sparkling water", "sparkling water"], ["Flavoured water", "flavoured water"]] }],
@@ -377,6 +385,8 @@ const ESSENTIALS = [
 
 // Who the extras list is for. Items marked with a "who" only show when that group is ticked.
 const HOUSEHOLD_GROUPS = [["adult", "Adults"], ["kids", "Children"], ["baby", "Baby"]];
+// Items where only one type makes sense (a nappy size, a dose): they keep a single-choice list. Every other list lets you tick several.
+const ESS_SINGLE = new Set(["tp", "nap", "pa", "ib", "kp", "fm", "bf", "pb", "eg", "tea"]);
 const essVisibleFor = (e, household) => !e.who || !!(household && household[e.who]);
 /*
  * Dietary tags worked out from ingredient names (so your own recipes get tagged too).
@@ -448,10 +458,26 @@ const Diet = (() => {
     };
   }
 
+  // Cuisine, guessed from the recipe name plus a few telltale ingredients (a guide only).
+  const CUISINE = {
+    indian: [/\b(tikka|masala|keema|korma|tandoori|biryani|madras|paneer|dal\b|dhal|naan|chapati|samosa|kedgeree|bhaji|vindaloo|jalfrezi|garam)/i],
+    mexican: [/\b(fajita|taco|quesadilla|burrito|enchilada|huevos|nachos?|chilli con carne|jalape|chipotle|guacamole|salsa|refried|tex-?mex)/i],
+    italian: [/\b(pasta|spaghetti|penne|rigatoni|linguine|tagliatelle|pappardelle|fusilli|lasagne|gnocchi|risotto|arborio|bolognese|ragu|carbonara|parmigiana|cacciatore|tiramisu|pizza|pesto|pancetta|passata|bruschetta|ciabatta)/i],
+    thai: [/\b(thai|satay|massaman|lemongrass|galangal|kaffir|pad thai)/i],
+    chinese: [/\b(chinese|stir[- ]fry|fried rice|dumpling|chow mein|chow|hoisin|oyster sauce|five[- ]spice|szechuan|sichuan|char siu|egg fried)/i],
+  };
+  function cuisines(r) {
+    const text = [r.name || "", ...(r.ingredients || []).map((i) => i.name || "")].join(" | ");
+    const out = {};
+    for (const [k, res] of Object.entries(CUISINE)) if (res.some((x) => x.test(text))) out[k] = true;
+    if (out.mexican && /spanish/i.test(r.name || "")) delete out.mexican;
+    return out;
+  }
+
   const cache = new WeakMap();
   function tags(r) {
     let c = cache.get(r.ingredients);
-    if (!c || c.mins !== r.mins) { c = { ...classify(r), mins: r.mins }; cache.set(r.ingredients, c); }
+    if (!c || c.mins !== r.mins) { c = { ...classify(r), ...cuisines(r), mins: r.mins }; cache.set(r.ingredients, c); }
     if (Array.isArray(r.tags) && r.tags.length) {            // tags ticked by hand on your own recipes add to the detected ones
       const m = { ...c }; for (const k of r.tags) m[k] = true; if (m.vegan) m.vegetarian = true; return m;
     }
@@ -467,7 +493,7 @@ const MEAL_LABEL = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner" };
 const TIER_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard", custom: "Mine" };
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const FILTERS = [["vegetarian", "Veggie"]];
-const FILTERS_MORE = [["vegan", "Vegan"], ["glutenFree", "Gluten-free"], ["dairyFree", "Dairy-free"], ["quick", "≤30 min"], ["veryQuick", "≤15 min"], ["chicken", "Chicken"], ["beef", "Beef"], ["pork", "Pork"],
+const FILTERS_MORE = [["vegan", "Vegan"], ["indian", "Indian"], ["mexican", "Mexican"], ["italian", "Italian"], ["thai", "Thai"], ["chinese", "Chinese"], ["glutenFree", "Gluten-free"], ["dairyFree", "Dairy-free"], ["quick", "≤30 min"], ["veryQuick", "≤15 min"], ["chicken", "Chicken"], ["beef", "Beef"], ["pork", "Pork"],
   ["lamb", "Lamb"], ["seafood", "Fish & seafood"], ["pasta", "Pasta"], ["rice", "Rice"], ["potato", "Potatoes"], ["eggs", "Eggs"]];
 let moreOpen = null;
 const STAR = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2.6l2.85 6 6.55.85-4.8 4.55 1.25 6.5L12 17.3 6.15 20.5l1.25-6.5L2.6 9.45l6.55-.85z"/></svg>';
@@ -492,6 +518,7 @@ const blank = () => ({
 let S = blank();
 const selected = new Map(), recipeSkip = new Map(), swaps = new Map(), skipped = new Set(), ticked = new Set(), favs = new Set(),
   essSel = new Map(), weekly = new Map(), pantry = new Set(), pantryBuy = new Set(), filters = new Set();
+const collapsedSecs = new Set(), openMulti = new Set(), cartOpen = new Set();
 let mealCounts = {}, essCounts = {}, regularMsg = "", showHidden = false, hiddenOpen = false;
 const hiddenRec = new Set(), hiddenEss = new Set();
 const REGULAR_MIN = 2;
@@ -595,12 +622,16 @@ const swapOf = (id, i) => (swaps.get(id) || new Map()).get(ingKey(i)) || null;
 
 // ---------- shopping list ----------
 const essList = () => ESSENTIALS.concat(essCustom.map((c) => ({ ...c, cat: "My items" })));
-const essDisplay = (e) => {
-  const ty = essTypes[e.id] && (e.types || []).find((x) => x[0] === essTypes[e.id]);      // a type replaces the base search
-  const bn = ty ? e.name + ": " + ty[0] : e.name, bq = ty ? ty[1] : e.query, n = (essNotes[e.id] || "").trim();   // the note is the brand
-  if (!n) return { name: bn, query: bq };
-  return { name: n + " " + bn.toLowerCase(), query: n + " " + bq };
-};
+const essPicked = (e) => { const v = essTypes[e.id]; return (Array.isArray(v) ? v : v ? [v] : []).filter((l) => (e.types || []).some((x) => x[0] === l)); };
+// One entry per ticked type (so "Foil + Cling film" becomes two searches); the brand note applies to each.
+function essParts(e) {
+  const n = (essNotes[e.id] || "").trim();
+  const mk = (bn, bq) => (n ? { name: n + " " + bn.toLowerCase(), query: n + " " + bq } : { name: bn, query: bq });
+  const picked = essPicked(e);
+  if (!picked.length) return [mk(e.name, e.query)];
+  return picked.map((l) => { const t = e.types.find((x) => x[0] === l); return Object.assign(mk(e.name + ": " + t[0], t[1]), { label: l }); });
+}
+const essDisplay = (e) => { const p = essParts(e); return p.length === 1 ? p[0] : { name: e.name + ": " + essPicked(e).join(", "), query: p[0].query }; };
 // Extras shown: everyday ones always, the rest when their group is ticked (or already picked / on your weekly list).
 const essShown = (e) => !hiddenEss.has(e.id) && (essVisibleFor(e, household) || essSel.has(e.id) || weekly.has(e.id));
 function buildItems() {
@@ -621,8 +652,8 @@ function buildItems() {
   }
   for (const [id, qty] of essSel) {
     const e = essList().find((x) => x.id === id); if (!e) continue;
-    const { name, query } = essDisplay(e);
-    totals.set("ess:" + id, { name, query, qty: 0, unit: "each", pack: 1, need: qty, from: new Map(), ess: e.cat });
+    const parts = essParts(e);
+    for (const p of parts) totals.set(parts.length === 1 ? "ess:" + id : "ess:" + id + ":" + p.label, { name: p.name, query: p.query, qty: 0, unit: "each", pack: 1, need: qty, from: new Map(), ess: e.cat });
   }
   for (const x of extra) totals.set("x:" + x.id, { name: x.name, query: x.name, qty: 0, unit: "each", pack: 1, need: x.qty || 1, from: new Map(), extra: true });
   return [...totals.entries()].map(([key, t]) => ({ key, name: t.name, query: t.query, unit: t.unit, pack: t.pack, need: t.need, from: [...t.from].map(([name, q]) => ({ name, q })), ess: t.ess, extra: t.extra,
@@ -797,7 +828,7 @@ function usualBlock() {
 function viewMeals(main) {
   const hx = main;   // controls scroll with the list so the phone screen isn't eaten by a tall sticky header
   segButtons(hx, "meal", Object.entries(MEAL_LABEL), ui.meal, (v) => { ui.meal = v; if (["favs", "picked"].includes(ui.tier)) ui.tier = "all"; persist(); render(); });
-  segButtons(hx, "", [["all", "Menu"], ["useup", "Complete cart"], ["favs", "Favorites"], ["picked", "Meals in Cart" + (selected.size ? " (" + selected.size + ")" : "")]],
+  segButtons(hx, "", [["all", "Menu"], ["useup", "Complete cart"], ["favs", "Favourites"], ["picked", "Meals in Cart" + (selected.size ? " (" + selected.size + ")" : "")]],
     ui.tier, (v) => { ui.tier = v; persist(); render(); });
   if (ui.tier === "useup") { useUpBlock(main); return; }
   const tools = el("div", "tools");
@@ -836,7 +867,7 @@ function viewMeals(main) {
     chips.append(c);
   }
   hx.append(chips);
-  if (ui.tier === "favs") { main.append(usualBlock()); main.append(el("h3", null, "Favorite meals")); }
+  if (ui.tier === "favs") { main.append(usualBlock()); main.append(el("h3", null, "Favourite meals")); }
   const ul = el("ul", "recipes"); ul.id = "recipes"; main.append(ul);
   renderRecipes();
 }
@@ -844,7 +875,7 @@ function renderRecipes() {
   const ul = $("recipes"); if (!ul) return; ul.innerHTML = "";
   const rows = recipeRows();
   if (!rows.length) {
-    const e = el("p", "empty", ui.tier === "favs" ? "No favorites yet. Tap the star on any meal." : ui.tier === "picked" ? "No meals in your cart yet. Tick meals on the other tabs."
+    const e = el("p", "empty", ui.tier === "favs" ? "No favourites yet. Tap the star on any meal." : ui.tier === "picked" ? "No meals in your cart yet. Tick meals on the other tabs."
       : filters.size || ui.levels.length ? "No meals match your filters. Try turning one off." : "No meals match.");
     ul.append(e); return;
   }
@@ -900,10 +931,11 @@ function recipeLi(r) {
     plan.addEventListener("change", () => { if (plan.value === "") return; const ws = planWeek || weekStart(Date.now());
       dayList(ws, Number(plan.value), true).push({ id: r.id, servings: selected.get(r.id), course: r.meal }); persist(); toast(r.name + " planned for " + DAYS[Number(plan.value)]); plan.value = ""; });
     r2.append(plan);
-    const tg = el("button", "link", expanded.has(r.id) ? "Hide ingredients" : "Ingredients"); tg.type = "button";
-    tg.addEventListener("click", () => { expanded.has(r.id) ? expanded.delete(r.id) : expanded.add(r.id); li.replaceWith(recipeLi(r)); });
+    const open = ui.tier === "picked" ? cartOpen : expanded;               // in Meals in Cart the ingredients start folded
+    const tg = el("button", "link", open.has(r.id) ? "Hide ingredients" : "Ingredients"); tg.type = "button";
+    tg.addEventListener("click", () => { open.has(r.id) ? open.delete(r.id) : open.add(r.id); li.replaceWith(recipeLi(r)); });
     r2.append(tg); ex.append(r2);
-    if (expanded.has(r.id)) ex.append(ingList(r, li));
+    if (open.has(r.id)) ex.append(ingList(r, li));
     li.append(ex);
   }
   return li;
@@ -1137,8 +1169,9 @@ function viewShop(main, hx) {
     const g = groups.get(a); if (!g) continue;
     const vis = g.filter((i) => !(ui.hideTicked && ticked.has(i.key)));
     if (!vis.length) continue;
-    const sec = el("div", "aisle"); const h = el("h3", null, a); h.append(el("span", null, g.filter((i) => ticked.has(i.key)).length + "/" + g.length)); sec.append(h);
-    const ul = el("ul");
+    const sec = el("div", "aisle"); const h = el("h3", "collh", a); h.append(el("span", null, g.filter((i) => ticked.has(i.key)).length + "/" + g.length)); sec.append(h);
+    const ul = el("ul"); const aid = "aisle:" + a; ul.hidden = collapsedSecs.has(aid); h.dataset.open = String(!ul.hidden); h.tabIndex = 0; h.setAttribute("role", "button");
+    h.addEventListener("click", () => { collapsedSecs.has(aid) ? collapsedSecs.delete(aid) : collapsedSecs.add(aid); ul.hidden = collapsedSecs.has(aid); h.dataset.open = String(!ul.hidden); });
     vis.sort((x, y) => (ticked.has(x.key) - ticked.has(y.key)) || x.name.localeCompare(y.name)).forEach((it) => ul.append(itemLi(it)));
     sec.append(ul); main.append(sec);
   }
@@ -1190,6 +1223,20 @@ function itemLi(it) {
   return li;
 }
 
+// Make a heading fold the content that follows it (until the next heading of the same kind).
+function collapsify(main, tag, key) {
+  let body = null;
+  for (const k of [...main.children]) {
+    if (k.tagName === tag) {
+      const id = key + k.textContent.trim(); const open = !collapsedSecs.has(id);
+      const mine = body = el("div", "secbody"); mine.hidden = !open; k.classList.add("collh"); k.dataset.open = String(open); k.tabIndex = 0; k.setAttribute("role", "button"); k.setAttribute("aria-expanded", String(open));
+      const flip = () => { collapsedSecs.has(id) ? collapsedSecs.delete(id) : collapsedSecs.add(id); mine.hidden = collapsedSecs.has(id); k.dataset.open = String(!mine.hidden); k.setAttribute("aria-expanded", String(!mine.hidden)); };
+      k.addEventListener("click", flip); k.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); flip(); } });
+      k.after(mine);
+    } else if (k.classList.contains("nocollapse")) body = null;
+    else if (body) body.append(k);
+  }
+}
 // ---------- Extras (essentials) ----------
 let weeklyOpen = false;
 function viewEss(main) {
@@ -1228,7 +1275,16 @@ function viewEss(main) {
         const n = el("input"); n.type = "text"; n.value = essNotes[e.id] || ""; n.placeholder = e.ph || "Brand or type (optional)"; n.setAttribute("aria-label", "Brand or type for " + e.name);
         n.addEventListener("input", () => { n.value.trim() ? (essNotes[e.id] = n.value.trim()) : delete essNotes[e.id]; persist(); });
         const hasT = Array.isArray(e.types) && e.types.length, hasB = Array.isArray(e.brands) && e.brands.length;
-        if (hasT) pickRow.append(mkSel("Type", [["", "Standard"], ...e.types.map((x) => [x[0], x[0]])], essTypes[e.id] || "", (v) => { v ? (essTypes[e.id] = v) : delete essTypes[e.id]; persist(); }));
+        if (hasT && ESS_SINGLE.has(e.id)) pickRow.append(mkSel("Type", [["", "Standard"], ...e.types.map((x) => [x[0], x[0]])], essPicked(e)[0] || "", (v) => { v ? (essTypes[e.id] = v) : delete essTypes[e.id]; persist(); }));
+        else if (hasT) {                                              // tick as many types as you need
+          const d = el("details", "multi"); const sm = el("summary"); d.append(sm);
+          const draw = () => { const p = essPicked(e); sm.textContent = p.length ? p.join(", ") : "Standard"; };
+          const panel = el("div", "multi-panel");
+          e.types.forEach((x) => { const lab = el("label"); const c = el("input"); c.type = "checkbox"; c.checked = essPicked(e).includes(x[0]); c.setAttribute("aria-label", x[0] + " for " + e.name);
+            c.addEventListener("change", () => { const cur = new Set(essPicked(e)); c.checked ? cur.add(x[0]) : cur.delete(x[0]); const arr = e.types.map((t) => t[0]).filter((l) => cur.has(l)); arr.length ? (essTypes[e.id] = arr) : delete essTypes[e.id]; draw(); persist(); });
+            lab.append(c, document.createTextNode(" " + x[0])); panel.append(lab); });
+          d.append(panel); draw(); d.open = openMulti.has(e.id); d.addEventListener("toggle", () => { d.open ? openMulti.add(e.id) : openMulti.delete(e.id); }); pickRow.append(d);
+        }
         if (hasB) {
           const cur = essNotes[e.id] || "", other = cur && !e.brands.includes(cur);
           n.hidden = !other; n.placeholder = "Type a brand";
@@ -1266,13 +1322,14 @@ function viewEss(main) {
       const b = el("button", "btn small", "Show again"); b.type = "button"; b.addEventListener("click", () => { hiddenEss.delete(e.id); hiddenOpen = true; persist(); rr(); });
       r2.append(b); dt.append(r2);
     }
-    main.append(dt);
+    dt.classList.add("nocollapse"); main.append(dt);
   }
   main.append(el("h3", null, "Add your own item"));
   const ar = el("div", "addrow"); const inp = el("input"); inp.type = "text"; inp.id = "ess-add"; inp.placeholder = "e.g. Cat food"; inp.setAttribute("aria-label", "New extra item");
   const ab = el("button", "btn", "Add"); ab.type = "button";
   ab.addEventListener("click", () => { const v = inp.value.trim(); if (!v) return; const id = "u" + Date.now().toString(36); essCustom.push({ id, name: v, query: v }); essSel.set(id, 1); persist(); rr(); });
   ar.append(inp, ab); main.append(ar);
+  collapsify(main, "H3", "ess:");
 }
 
 // ---------- More: use up leftovers, pantry, backup ----------
@@ -1370,6 +1427,7 @@ function viewMore(main) {
   });
   main.append(rs, msg);
   const note = el("p", "hint", "Tip: on iPhone or Android, use Share or the browser menu → Add to Home Screen to open this like an app."); main.append(note);
+  collapsify(main, "H2", "more:");
 }
 
 (async function start() {
