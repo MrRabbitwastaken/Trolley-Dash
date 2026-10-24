@@ -553,10 +553,11 @@ function snapshot() {
 // ---------- storage: this browser always; synced across your devices when signed in ----------
 const LS = "mealcart-planner-v1";
 let dbDoc = null, saveTimer = null, lastSaved = 0;
-const setSync = (t) => { const e = document.getElementById("sync"); if (e) e.textContent = t; };
+const setSync = (t) => { const e = document.getElementById("sync"); if (e) e.textContent = document.documentElement.dataset.extSync && !dbDoc ? "Synced with extension" : t; };
 function persist() {
   const snap = snapshot(); S.ts = snap.ts;
   try { localStorage.setItem(LS, JSON.stringify(snap)); } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent("trolley:saved")); } catch (_) {}   // lets the browser extension (if installed) mirror this
   if (dbDoc) { clearTimeout(saveTimer); setSync("Saving…"); saveTimer = setTimeout(async () => {
     try { await dbDoc.set({ json: JSON.stringify(snap), ts: snap.ts }); lastSaved = snap.ts; setSync("Synced"); } catch (_) { setSync("Saved on this device"); } }, 700); }
   else setSync("Saved on this device");
@@ -589,6 +590,11 @@ async function pullRemote(rerender) {
   } catch (_) {}
 }
 
+// The extension changed our saved data (or merged it on first sync): load it without saving it back.
+window.addEventListener("trolley:reload", () => {
+  try { const o = JSON.parse(localStorage.getItem(LS) || "null"); if (o && (o.ts || 0) > (S.ts || 0)) { hydrate(o); render(); } } catch (_) {}
+  setSync("Saved on this device");
+});
 // ---------- helpers ----------
 const $ = (id) => document.getElementById(id);
 const all = () => RECIPES.concat(custom);
@@ -1428,6 +1434,8 @@ function viewMore(main) {
   main.append(rs, msg);
   const note = el("p", "hint", "Tip: on iPhone or Android, use Share or the browser menu → Add to Home Screen to open this like an app."); main.append(note);
   collapsify(main, "H2", "more:");
+  const pp = el("p", "hint nocollapse"); const plink = el("a", null, "Privacy Policy"); plink.href = "https://trolley-dash.co.uk/privacy.html"; plink.target = "_blank"; plink.rel = "noopener"; plink.id = "privacy-link";
+  pp.append(plink, document.createTextNode(" · Your data stays on this device unless you use the Trolley Dash extension or back it up yourself.")); main.append(pp);
 }
 
 (async function start() {
