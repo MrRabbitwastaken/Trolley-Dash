@@ -541,162 +541,6 @@ const Diet = (() => {
 })();
 
 
-/* Google sign-in settings for Drive sync. Paste your OAuth "Web application" client ID between the quotes. Leave as is to keep Drive sync switched off. */
-const GOOGLE_CLIENT_ID = "__GOOGLE_CLIENT_ID__";
-
-/*
- * How Trolley Dash data is shaped on the website (a "web snapshot") and in the extension's storage, and how to convert and merge them.
- * Used by the website, the extension popup, the on-site mirror (adapters/site-sync.js) and Google Drive sync.
- */
-const SyncModel = (() => {
-  const arr = (v, d = []) => (Array.isArray(v) ? v : d);
-  const obj = (v, d = {}) => (v && typeof v === "object" && !Array.isArray(v) ? v : d);
-  const SHARED = ["selection", "custom", "favs", "hiddenRec", "essData", "settings", "pantry", "plans", "usual", "household"];
-
-  // web snapshot -> extension storage values
-  function toExt(w, x) {
-    const sel = obj(x.selection), ed = obj(x.essData), st = obj(x.settings), ui = obj(w.ui);
-    return {
-      selection: { ...sel, selected: arr(w.selected), skipped: arr(w.skipped), recipeSkip: arr(w.recipeSkip), swaps: arr(w.swaps), pantryBuy: arr(w.pantryBuy), ess: arr(w.ess) },
-      custom: arr(w.custom).map((r) => { const c = { ...r }; delete c.own; return c; }),
-      favs: arr(w.favs), hiddenRec: arr(w.hiddenRec), pantry: arr(w.pantry), plans: obj(w.plans), usual: arr(w.usual),
-      household: obj(w.household, { adult: true, kids: false, baby: false }),
-      essData: { ...ed, custom: arr(w.essCustom), notes: obj(w.essNotes), types: obj(w.essTypes), weekly: arr(w.essWeekly), counts: obj(w.essCounts), hidden: arr(w.hiddenEss) },
-      settings: { ...st, portions: Number(ui.portions) || 0, askPantry: ui.askPantry !== false },
-    };
-  }
-  // extension storage -> web snapshot (keeps web-only fields such as ticked items and UI state)
-  function toWeb(x, w) {
-    const sel = obj(x.selection), ed = obj(x.essData), st = obj(x.settings), base = obj(w);
-    return {
-      ...base,
-      selected: arr(sel.selected), skipped: arr(sel.skipped), recipeSkip: arr(sel.recipeSkip), swaps: arr(sel.swaps), pantryBuy: arr(sel.pantryBuy), ess: arr(sel.ess),
-      custom: arr(x.custom).map((r) => { const c = { ...r }; delete c.own; return c; }),
-      favs: arr(x.favs), hiddenRec: arr(x.hiddenRec), pantry: arr(x.pantry), plans: obj(x.plans), usual: arr(x.usual),
-      household: obj(x.household, base.household || { adult: true, kids: false, baby: false }),
-      essCustom: arr(ed.custom), essNotes: obj(ed.notes), essTypes: obj(ed.types), essWeekly: arr(ed.weekly), essCounts: obj(ed.counts), hiddenEss: arr(ed.hidden),
-      ui: { ...obj(base.ui), portions: Number(st.portions) || 0, askPantry: st.askPantry !== false },
-    };
-  }
-  // first sync: combine both so nothing is lost
-  function merge(w, x) { return mergeWeb(w, toWeb(x, w)); }   // extension values in web shape, over the web's own state
-  // combine two web-shaped snapshots (wk = this device, a = the other side)
-  function mergeWeb(w, a) {
-    const uniq = (xs, key) => { const seen = new Set(), out = []; for (const v of xs) { const k = key ? key(v) : JSON.stringify(v); if (!seen.has(k)) { seen.add(k); out.push(v); } } return out; };
-    const wk = obj(w);
-    const pair = (p, q) => uniq([...arr(p), ...arr(q)], (v) => (Array.isArray(v) ? v[0] : JSON.stringify(v)));
-    const plans = { ...obj(a.plans) };
-    for (const [week, days] of Object.entries(obj(wk.plans))) { plans[week] = { ...obj(plans[week]) }; for (const [d, list] of Object.entries(obj(days))) if (!arr(plans[week][d]).length) plans[week][d] = list; }
-    return {
-      ...a, plans,
-      selected: pair(wk.selected, a.selected), skipped: uniq([...arr(wk.skipped), ...arr(a.skipped)]), pantryBuy: uniq([...arr(wk.pantryBuy), ...arr(a.pantryBuy)]),
-      recipeSkip: pair(wk.recipeSkip, a.recipeSkip), swaps: pair(wk.swaps, a.swaps), ess: pair(wk.ess, a.ess),
-      custom: uniq([...arr(wk.custom), ...arr(a.custom)], (r) => r.id), favs: uniq([...arr(wk.favs), ...arr(a.favs)]),
-      hiddenRec: uniq([...arr(wk.hiddenRec), ...arr(a.hiddenRec)]), hiddenEss: uniq([...arr(wk.hiddenEss), ...arr(a.hiddenEss)]),
-      pantry: uniq([...arr(wk.pantry), ...arr(a.pantry)]), usual: uniq([...arr(wk.usual), ...arr(a.usual)], (u) => u.id || u.name),
-      essCustom: uniq([...arr(wk.essCustom), ...arr(a.essCustom)], (c) => c.id), essWeekly: pair(wk.essWeekly, a.essWeekly),
-      essNotes: { ...obj(a.essNotes), ...obj(wk.essNotes) }, essTypes: { ...obj(a.essTypes), ...obj(wk.essTypes) },
-      essCounts: { ...obj(a.essCounts), ...obj(wk.essCounts) },
-      ts: Date.now(),
-    };
-  }
-  const hasWebData = (w) => !!w && ["selected", "custom", "favs", "hiddenRec", "pantry", "usual", "essCustom", "hiddenEss", "ess", "essWeekly"].some((k) => arr(w[k]).length) || (!!w && Object.values(obj(w.plans)).some((d) => Object.values(obj(d)).some((l) => arr(l).length)));
-  const hasExtData = (x) => SHARED.some((k) => { const v = x[k]; return Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : false; });
-
-  return { SHARED, toExt, toWeb, merge, mergeWeb, hasExtData, hasWebData };
-})();
-
-
-/*
- * Google Drive sync (no server of ours): keeps one small file, trolley-dash.json, in the signed-in person's own hidden
- * Drive "app data" folder. The website and the extension both read and write it, so the same Google account shares data
- * across devices. Only this app can see that folder. The newest change wins; if both sides changed they are merged.
- */
-const GDrive = (() => {
-  const API = "https://www.googleapis.com";
-  const NAME = "trolley-dash.json";
-  const SCOPE = "https://www.googleapis.com/auth/drive.appdata";
-  class AuthError extends Error {}
-
-  async function call(token, path, opts = {}) {
-    const r = await fetch(API + path, { ...opts, headers: { Authorization: "Bearer " + token, ...(opts.headers || {}) } });
-    if (r.status === 401) throw new AuthError("Google sign-in expired");
-    if (!r.ok) throw new Error("Google Drive said " + r.status);
-    return r;
-  }
-  async function find(token) {
-    const q = encodeURIComponent(`name='${NAME}'`);
-    const r = await call(token, `/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id,modifiedTime)&pageSize=10`);
-    const j = await r.json();
-    return (j.files || [])[0] || null;
-  }
-  async function read(token) {
-    const file = await find(token);
-    if (!file) return { file: null, data: null };
-    const r = await call(token, `/drive/v3/files/${file.id}?alt=media`);
-    let data = null; try { data = await r.json(); } catch (_) {}
-    return { file, data };
-  }
-  async function write(token, file, data) {
-    const body = JSON.stringify(data);
-    if (file) return call(token, `/upload/drive/v3/files/${file.id}?uploadType=media`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body });
-    const b = "td" + Math.random().toString(36).slice(2);
-    const meta = JSON.stringify({ name: NAME, parents: ["appDataFolder"] });
-    const multipart = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${b}--`;
-    return call(token, "/upload/drive/v3/files?uploadType=multipart", { method: "POST", headers: { "Content-Type": "multipart/related; boundary=" + b }, body: multipart });
-  }
-
-  /*
-   * One sync round. env supplies:
-   *   token()            -> access token (throws AuthError if there isn't a valid one)
-   *   local()            -> { snap, ts, empty }   this device's data in web-snapshot shape (may be async)
-   *   apply(snap, ts)    -> save snap on this device
-   *   last() / setLast() -> the ts this device last agreed with Drive (0 = never synced)
-   *   merge(localSnap, remoteSnap) -> combined snapshot
-   * Returns "pushed" | "pulled" | "merged" | "same" | "nothing".
-   */
-  async function sync(env, depth = 0) {
-    const token = await env.token();
-    const { file, data } = await read(token);
-    const L = await env.local(), K = (await env.last()) || 0, R = (data && data.ts) || 0;
-    // Write, then read back: if another device wrote at the same moment, go round again so its changes are merged in, not lost.
-    const send = async (snap, ts) => {
-      await write(token, file, { app: "trolley-dash", v: 1, ts, snap });
-      const chk = await read(token);
-      if (((chk.data && chk.data.ts) || 0) !== ts && depth < 3) return false;
-      await env.setLast(ts); return true;
-    };
-    const again = () => sync(env, depth + 1);
-    if (!data || !data.snap) {
-      if (L.empty) return "nothing";
-      return (await send(L.snap, L.ts || Date.now())) ? "pushed" : again();
-    }
-    const remote = data.snap;
-    if (!K) {                                                     // first time on this device
-      if (L.empty) { await env.apply(remote, R); await env.setLast(R); return "pulled"; }
-      const m = env.merge(L.snap, remote), ts = Math.max(Date.now(), R + 1);
-      if (!(await send(m, ts))) return again();
-      await env.apply(m, ts); return "merged";
-    }
-    const remoteNew = R > K, localNew = L.ts > K && !L.empty;
-    if (remoteNew && localNew) {
-      const m = env.merge(L.snap, remote), ts = Math.max(Date.now(), R + 1);
-      if (!(await send(m, ts))) return again();
-      await env.apply(m, ts); return "merged";
-    }
-    if (remoteNew) { await env.apply(remote, R); await env.setLast(R); return "pulled"; }
-    if (localNew) return (await send(L.snap, L.ts)) ? "pushed" : again();
-    return "same";
-  }
-  async function remove(token) {                                   // delete the cloud copy
-    const f = await find(token);
-    if (f) await call(token, `/drive/v3/files/${f.id}`, { method: "DELETE" });
-    return !!f;
-  }
-  return { sync, remove, SCOPE, AuthError };
-})();
-
-
 
 const MEAL_LABEL = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", dessert: "Dessert" };
 const MEAL_TABS = { bl: "Breakfast / Lunch", dinner: "Dinner", dessert: "Desserts" };   // the menu groups breakfast and lunch together
@@ -761,35 +605,10 @@ function snapshot() {
     pantry: [...pantry], pantryBuy: [...pantryBuy], plans, filters: [...filters], ui, ts: Date.now() };
 }
 
-// ---------- Google Drive sync (your own Drive, no account with us) ----------
-const GD_KEY = "trolley-gd";
-const gd = { st: (() => { try { return JSON.parse(localStorage.getItem(GD_KEY) || "{}") || {}; } catch (_) { return {}; } })(), running: false, again: false, applying: false, timer: null };
-const gdSave = () => { try { localStorage.setItem(GD_KEY, JSON.stringify(gd.st)); } catch (_) {} };
-const gdConfigured = () => !/^__/.test(GOOGLE_CLIENT_ID) && !!GOOGLE_CLIENT_ID;
-const gdActive = () => gdConfigured() && !!gd.st.on;
-const gdAuthUrl = (silent) => {
-  gd.st.state = Math.random().toString(36).slice(2) + Date.now().toString(36); gdSave();
-  return "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({ client_id: GOOGLE_CLIENT_ID, redirect_uri: location.origin + "/", response_type: "token", scope: GDrive.SCOPE, include_granted_scopes: "true", state: gd.st.state, ...(silent ? { prompt: "none" } : {}) });
-};
-function gdCaptureReturn() {                       // Google sends the browser back here with the token in the address
-  if (!/access_token=|error=/.test(location.hash)) return;
-  const p = new URLSearchParams(location.hash.slice(1));
-  if (p.get("state") && p.get("state") === gd.st.state) {
-    if (p.get("access_token")) gd.st = { ...gd.st, on: true, token: p.get("access_token"), exp: Date.now() + (Number(p.get("expires_in")) || 3600) * 1000, paused: false, state: "" };
-    else gd.st = { ...gd.st, paused: !!gd.st.on, state: "" };
-    gdSave();
-  }
-  try { history.replaceState(null, "", location.pathname + location.search); } catch (_) {}
-}
-gdCaptureReturn();
 // ---------- storage: this browser always; synced across your devices when signed in ----------
 const LS = "mealcart-planner-v1";
 let dbDoc = null, saveTimer = null, lastSaved = 0;
-const setSync = (t) => {
-  const e = document.getElementById("sync"); if (!e) return;
-  if (gdActive()) { e.textContent = gd.st.paused ? "Google sync paused · tap to sign in" : gd.running ? "Syncing…" : "Synced with Google Drive"; e.style.cursor = gd.st.paused ? "pointer" : ""; return; }
-  e.textContent = document.documentElement.dataset.extSync && !dbDoc ? "Synced with extension" : t;
-};
+const setSync = (t) => { const e = document.getElementById("sync"); if (e) e.textContent = document.documentElement.dataset.extSync && !dbDoc ? "Synced with extension" : t; };
 function persist() {
   const snap = snapshot(); S.ts = snap.ts;
   try { localStorage.setItem(LS, JSON.stringify(snap)); } catch (_) {}
@@ -826,48 +645,6 @@ async function pullRemote(rerender) {
   } catch (_) {}
 }
 
-
-const gdEnv = {
-  token: async () => { const s = gd.st; if (s.token && s.exp > Date.now() + 60000) return s.token; throw new GDrive.AuthError("expired"); },
-  local: () => { const snap = snapshot(); return { snap, ts: S.ts || 0, empty: !SyncModel.hasWebData(snap) }; },
-  apply: (snap, ts) => {
-    const cur = snapshot(), r = snap.ui || {};
-    const next = { ...snap, filters: cur.filters, ui: { ...cur.ui, portions: r.portions != null ? r.portions : cur.ui.portions, askPantry: r.askPantry != null ? r.askPantry : cur.ui.askPantry }, ts };
-    hydrate(next); S.ts = ts;
-    try { localStorage.setItem(LS, JSON.stringify(next)); } catch (_) {}
-    gd.applying = true; try { window.dispatchEvent(new CustomEvent("trolley:saved")); } catch (_) {} gd.applying = false;
-    render();
-  },
-  last: () => gd.st.last || 0,
-  setLast: (t) => { gd.st.last = t; gdSave(); },
-  merge: (l, r) => SyncModel.mergeWeb(l, r),
-};
-async function gdSync() {
-  if (!gdActive()) return;
-  if (gd.running) { gd.again = true; return; }
-  gd.running = true; setSync();
-  try { await GDrive.sync(gdEnv); gd.st.at = Date.now(); gd.st.paused = false; gdSave(); }
-  catch (e) {
-    if (e instanceof GDrive.AuthError) { gd.st.token = ""; gd.st.exp = 0; gd.st.paused = true; gdSave(); } else gd.st.err = String(e && e.message || e);
-  } finally { gd.running = false; setSync(); gdPaintBox(); if (gd.again) { gd.again = false; gdSoon(); } }
-}
-const gdSoon = () => { clearTimeout(gd.timer); gd.timer = setTimeout(gdSync, 2500); };
-function gdConnect(silent) { location.href = gdAuthUrl(silent); }
-function gdStart() {
-  if (!gdActive()) return;
-  if (gd.st.token && gd.st.exp > Date.now() + 60000) gdSync();
-  else if (!gd.st.paused && Date.now() - (gd.st.tried || 0) > 300000) { gd.st.tried = Date.now(); gdSave(); gdConnect(true); }   // quietly get a fresh token (one hop to Google and back)
-  else { gd.st.paused = true; gdSave(); setSync(); }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && gd.st.token && gd.st.exp > Date.now() + 60000) gdSoon(); });
-}
-window.addEventListener("trolley:saved", () => { if (!gd.applying) gdSoon(); });
-document.addEventListener("click", (e) => { if (e.target && e.target.id === "sync" && gdActive() && gd.st.paused) gdConnect(false); });
-let gdPaintBox = () => {};
-async function gdDisconnect(del) {
-  try { if (del) { const t = await gdEnv.token(); await GDrive.remove(t); } } catch (_) { toast("Couldn’t delete the cloud copy just now"); return; }
-  if (gd.st.token) { try { fetch("https://oauth2.googleapis.com/revoke?token=" + encodeURIComponent(gd.st.token), { method: "POST" }); } catch (_) {} }
-  gd.st = {}; gdSave(); setSync("Saved on this device"); gdPaintBox(); toast(del ? "Disconnected and cloud copy deleted" : "Disconnected from Google Drive");
-}
 
 // The extension changed our saved data (or merged it on first sync): load it without saving it back.
 window.addEventListener("trolley:reload", () => {
@@ -1846,28 +1623,6 @@ function viewMore(main) {
   const el2 = el("a", "btn small primary", "Get Trolley Dash on the Chrome Web Store"); el2.id = "ext-link"; el2.href = "https://chromewebstore.google.com/detail/trolley-dash/iglphllajkaeapaiogblmpnicnepfioo"; el2.target = "_blank"; el2.rel = "noopener"; el2.style.cssText = "display:inline-block;text-decoration:none";
   ext.append(el2); main.append(ext);
 
-  main.append(el("h2", null, "Sync across devices (Google Drive)"));
-  main.append(el("p", "hint", "Sign in with the same Google account on your phone, laptop and the extension to share your meals, favourites, plans, pantry and Extras settings. They are kept as one small file in your own Google Drive, in a hidden folder only Trolley Dash can open. Nothing is sent to us."));
-  const gst = el("p", "hint"); gst.id = "gd-status"; gst.setAttribute("role", "status");
-  const grow = el("div", "hrow"); grow.style.flexWrap = "wrap";
-  const gc = el("button", "btn small primary", "Connect Google Drive"); gc.type = "button"; gc.id = "gd-connect";
-  const gn = el("button", "btn small", "Sync now"); gn.type = "button"; gn.id = "gd-now";
-  const go = el("button", "btn small", "Disconnect"); go.type = "button"; go.id = "gd-off";
-  const gx = el("button", "btn small", "Disconnect and delete cloud copy"); gx.type = "button"; gx.id = "gd-del";
-  gc.addEventListener("click", () => gdConnect(false));
-  gn.addEventListener("click", () => { if (gd.st.token && gd.st.exp > Date.now() + 60000) gdSync(); else gdConnect(false); });
-  go.addEventListener("click", () => gdDisconnect(false));
-  gx.addEventListener("click", () => { if (!gx.dataset.sure) { gx.dataset.sure = 1; gx.textContent = "Tap again to delete the cloud copy"; return; } gdDisconnect(true); });
-  grow.append(gc, gn, go, gx); main.append(gst, grow);
-  gdPaintBox = () => {
-    if (!document.body.contains(gst)) return;
-    const cfg = gdConfigured(), on = gdActive();
-    gc.hidden = !cfg || on; gn.hidden = go.hidden = gx.hidden = !on;
-    gc.textContent = gd.st.on ? "Sign in again" : "Connect Google Drive";
-    gst.textContent = !cfg ? "Google Drive sync is only available on trolley-dash.co.uk." : !on ? "Not connected. Your data stays on this device." : gd.st.paused ? "Sign-in needed: tap Sync now to sign in to Google again." : gd.running ? "Syncing…" : "Connected." + (gd.st.at ? " Last synced " + new Date(gd.st.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + "." : "");
-  };
-  gdPaintBox();
-
   main.append(el("h2", null, "Backup and moving between devices"));
   main.append(el("p", "hint", "You can also copy everything as text and paste it somewhere safe."));
   const bk = el("div", "hrow"); bk.style.flexWrap = "wrap";
@@ -1886,13 +1641,12 @@ function viewMore(main) {
   const note = el("p", "hint", "Tip: on iPhone or Android, use Share or the browser menu → Add to Home Screen to open this like an app."); main.append(note);
   collapsify(main, "H2", "more:");
   const pp = el("p", "hint nocollapse"); const plink = el("a", null, "Privacy Policy"); plink.href = "https://trolley-dash.co.uk/privacy.html"; plink.target = "_blank"; plink.rel = "noopener"; plink.id = "privacy-link";
-  pp.append(plink, document.createTextNode(" · Your data stays on this device unless you use the Trolley Dash extension, turn on Google Drive sync, or back it up yourself.")); main.append(pp);
+  pp.append(plink, document.createTextNode(" · Your data stays on this device unless you use the Trolley Dash extension or back it up yourself.")); main.append(pp);
 }
 
 (async function start() {
   render();
   await loadAll();
   render();
-  gdStart();
 })();
 </script>
